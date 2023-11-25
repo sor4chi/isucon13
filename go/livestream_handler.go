@@ -543,7 +543,7 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel Li
 	// 	tagIDs[i] = livestreamTagModels[i].TagID
 	// }
 
-	var tags []Tag
+	var tmptags []*Tag
 
 	// if len(tagIDs) > 0 {
 	// 	query, params, err := sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIDs)
@@ -562,8 +562,13 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel Li
 			AND B.tag_id = A.id
 		)
 	`
-	if err := tx.SelectContext(ctx, &tags, query, livestreamModel.ID); err != nil {
+	if err := tx.SelectContext(ctx, &tmptags, query, livestreamModel.ID); err != nil {
 		return Livestream{}, err
+	}
+
+	tags := make([]Tag, len(tmptags))
+	for i := range tmptags {
+		tags[i] = *tmptags[i]
 	}
 
 	livestream := Livestream{
