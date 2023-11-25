@@ -125,6 +125,7 @@ func initializeHandler(c echo.Context) error {
 		"CREATE INDEX `ng_user_livesteams_idx` ON `ng_words` (`user_id`, `livestream_id`)",
 		"CREATE INDEX `livestream_id_idx` ON `livestream_tags` (`livestream_id`)",
 		"CREATE INDEX `icon_user_id_idx` ON `icons` (`user_id`)",
+		"CREATE INDEX `livestream_id_idx` ON `livecomments` (`livestream_id`, `created_at` DESC)",
 	}
 	for _, index := range indexes {
 		if _, err := dbConn.Exec(index); err != nil {
