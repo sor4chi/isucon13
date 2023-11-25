@@ -155,7 +155,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 		livestreamIDs = append(livestreamIDs, livestream.ID)
 	}
 
-	query, args, err := sqlx.In("SELECT livestream_id, SUM(tip) AS total_tips, COUNT(*) AS total_comments FROM livecomments WHERE livestream_id IN (?) GROUP BY livestream_id")
+	query, args, err := sqlx.In("SELECT livestream_id, SUM(tip) AS total_tips, COUNT(*) AS total_comments FROM livecomments WHERE livestream_id IN (?) GROUP BY livestream_id", livestreamIDs)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
 	}
