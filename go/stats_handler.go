@@ -134,10 +134,11 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	// リアクション数
 	var totalReactions int64
-	query := `SELECT COUNT(*) FROM users u
-    INNER JOIN livestreams l ON l.user_id = u.id
-    INNER JOIN reactions r ON r.livestream_id = l.id
-    WHERE u.name = ?
+	query := `
+		SELECT COUNT(*) FROM users u
+		INNER JOIN livestreams l ON l.user_id = u.id
+		INNER JOIN reactions r ON r.livestream_id = l.id
+		WHERE u.name = ?
 	`
 	if err := tx.GetContext(ctx, &totalReactions, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total reactions: "+err.Error())
@@ -164,26 +165,43 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 
 	// 合計視聴者数
-	var viewersCount int64
+	var livestreamIDs []int64
 	for _, livestream := range livestreams {
-		var cnt int64
-		if err := tx.GetContext(ctx, &cnt, "SELECT COUNT(*) FROM livestream_viewers_history WHERE livestream_id = ?", livestream.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream_view_history: "+err.Error())
-		}
-		viewersCount += cnt
+		livestreamIDs = append(livestreamIDs, livestream.ID)
+	}
+
+	query, args, err := sqlx.In("SELECT livestream_id, COUNT(*) AS count FROM livestream_viewers_history WHERE livestream_id IN (?) GROUP BY livestream_id", livestreamIDs)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
+	}
+	query = tx.Rebind(query)
+
+	// ビューアー数を取得
+	var viewers []struct {
+		LivestreamID int64 `db:"livestream_id"`
+		Count        int64 `db:"count"`
+	}
+
+	if err := tx.SelectContext(ctx, &viewers, query, args...); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream_view_history: "+err.Error())
+	}
+
+	var viewersCount int64
+	for _, viewer := range viewers {
+		viewersCount += viewer.Count
 	}
 
 	// お気に入り絵文字
 	var favoriteEmoji string
 	query = `
-	SELECT r.emoji_name
-	FROM users u
-	INNER JOIN livestreams l ON l.user_id = u.id
-	INNER JOIN reactions r ON r.livestream_id = l.id
-	WHERE u.name = ?
-	GROUP BY emoji_name
-	ORDER BY COUNT(*) DESC, emoji_name DESC
-	LIMIT 1
+		SELECT r.emoji_name
+		FROM users u
+		INNER JOIN livestreams l ON l.user_id = u.id
+		INNER JOIN reactions r ON r.livestream_id = l.id
+		WHERE u.name = ?
+		GROUP BY emoji_name
+		ORDER BY COUNT(*) DESC, emoji_name DESC
+		LIMIT 1
 	`
 	if err := tx.GetContext(ctx, &favoriteEmoji, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to find favorite emoji: "+err.Error())
