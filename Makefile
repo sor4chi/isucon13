@@ -106,7 +106,7 @@ mysql-conf-deploy:
 .PHONY: app-deploy
 app-deploy:
 	echo "app deploy"
-	cd $(APP) && go build -o $(APP_BINARY) *.go
+	cd $(APP) && make build
 	sudo systemctl restart $(SERVICE)
 
 
