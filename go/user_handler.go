@@ -88,6 +88,8 @@ type PostIconResponse struct {
 func getIconHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
+	ifNoneMatch := c.Request().Header.Get("If-None-Match")
+
 	username := c.Param("username")
 
 	tx, err := dbConn.BeginTxx(ctx, nil)
@@ -95,6 +97,11 @@ func getIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
 	}
 	defer tx.Rollback()
+
+	prevHash, ok := userImageHashCache.Get(username)
+	if ok && prevHash == ifNoneMatch {
+		return c.NoContent(http.StatusNotModified)
+	}
 
 	var user UserModel
 	if err := tx.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
@@ -112,6 +119,9 @@ func getIconHandler(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
 		}
 	}
+
+	iconHash := sha256.Sum256(image)
+	userImageHashCache.Set(username, fmt.Sprintf("%x", iconHash))
 
 	return c.Blob(http.StatusOK, "image/jpeg", image)
 }
@@ -432,6 +442,8 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		},
 		IconHash: fmt.Sprintf("%x", iconHash),
 	}
+
+	userImageHashCache.Set(userModel.Name, user.IconHash)
 
 	return user, nil
 }
