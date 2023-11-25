@@ -7,7 +7,7 @@ if test -f /home/isucon/env.sh; then
 	. /home/isucon/env.sh
 fi
 
-ISUCON_DB_HOST=${ISUCON13_MYSQL_DIALCONFIG_ADDRESS:-127.0.0.1}
+ISUCON_DB_HOST=${ISUCON13_MYSQL_DIALCONFIG_ADDRESS:-192.168.0.13}
 ISUCON_DB_PORT=${ISUCON13_MYSQL_DIALCONFIG_PORT:-3306}
 ISUCON_DB_USER=${ISUCON13_MYSQL_DIALCONFIG_USER:-isucon}
 ISUCON_DB_PASSWORD=${ISUCON13_MYSQL_DIALCONFIG_PASSWORD:-isucon}
@@ -68,6 +68,6 @@ mysql -u"$ISUCON_DB_USER" \
 		--port "$ISUCON_DB_PORT" \
 		"$ISUCON_DB_NAME" < initial_livecomments.sql
 
-bash ../pdns/init_zone.sh 
+bash ../pdns/init_zone.sh
 
 
