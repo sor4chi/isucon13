@@ -32,7 +32,8 @@ var (
 )
 
 var (
-	themeCache = NewCache[int64, ThemeModel]()
+	themeCache         = NewCache[int64, ThemeModel]()
+	userImageHashCache = NewCache[string, string]()
 )
 
 func init() {
@@ -110,6 +111,7 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 
 func initializeHandler(c echo.Context) error {
 	themeCache.Init()
+	userImageHashCache.Init()
 
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
@@ -130,6 +132,7 @@ func main() {
 	}()
 
 	themeCache.Init()
+	userImageHashCache.Init()
 
 	e := echo.New()
 	e.Debug = true
