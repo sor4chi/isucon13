@@ -104,12 +104,32 @@ func getLivecommentsHandler(c echo.Context) error {
 	}
 
 	livecomments := make([]Livecomment, len(livecommentModels))
-	for i := range livecommentModels {
-		livecomment, err := fillLivecommentResponse(ctx, tx, livecommentModels[i])
+	for i, livecommentModel := range livecommentModels {
+		commentOwnerModel := UserModel{}
+		if err := tx.GetContext(ctx, &commentOwnerModel, "SELECT * FROM users WHERE id = ?", livecommentModel.UserID); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+		}
+		commentOwner, err := fillUserResponse(ctx, tx, commentOwnerModel)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+		}
+		livestreamModel := LivestreamModel{}
+		if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModel.LivestreamID); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+		}
+		livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
 		}
 
+		livecomment := Livecomment{
+			ID:         livecommentModel.ID,
+			User:       commentOwner,
+			Livestream: livestream,
+			Comment:    livecommentModel.Comment,
+			Tip:        livecommentModel.Tip,
+			CreatedAt:  livecommentModel.CreatedAt,
+		}
 		livecomments[i] = livecomment
 	}
 
