@@ -118,6 +118,17 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
 	}
 
+	indexes := []string{
+		"CREATE INDEX `livestreams_user_id` ON `livestreams` (`user_id`)",
+		"CREATE INDEX `reservation_slots_duration_idx` ON `reservation_slots` (`start_at`, `end_at`)",
+		"CREATE INDEX `ng_user_livesteams_idx` ON `ng_words` (`user_id`, `livestream_id`)",
+	}
+	for _, index := range indexes {
+		if _, err := dbConn.Exec(index); err != nil {
+			c.Logger().Warnf("failed to create index: %s", err)
+		}
+	}
+
 	c.Request().Header.Add("Content-Type", "application/json;charset=utf-8")
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "golang",
