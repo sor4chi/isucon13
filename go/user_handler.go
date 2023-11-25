@@ -487,18 +487,38 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 func fillUserResponseBulk(ctx context.Context, tx *sqlx.Tx, userModels []*UserModel) ([]User, error) {
 	users := make([]User, len(userModels))
 
+	themeModelMap := make(map[int64]ThemeModel)
+	userIDs := make([]int64, len(userModels))
+
 	for i := range userModels {
 		userModel := userModels[i]
-		themeModel := ThemeModel{}
 		if v, ok := themeCache.Get(userModel.ID); ok {
-			themeModel = v
+			themeModelMap[userModel.ID] = v
 		} else {
-			if err := tx.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
-				return []User{}, err
-			}
-			themeCache.Set(userModel.ID, themeModel)
+			userIDs[i] = userModel.ID
 		}
+	}
 
+	if len(userIDs) > 0 {
+		query, args, err := sqlx.In("SELECT * FROM themes WHERE user_id IN (?)", userIDs)
+		if err != nil {
+			return []User{}, err
+		}
+		query = tx.Rebind(query)
+		var themeModels []ThemeModel
+		if err := tx.SelectContext(ctx, &themeModels, query, args...); err != nil {
+			return []User{}, err
+		}
+		for i := range themeModels {
+			themeModel := themeModels[i]
+			themeModelMap[themeModel.UserID] = themeModel
+			themeCache.Set(themeModel.UserID, themeModel)
+		}
+	}
+
+	for i := range userModels {
+		userModel := userModels[i]
+		themeModel := themeModelMap[userModel.ID]
 		var iconHash = [32]byte{}
 
 		if v, ok := userImageHashCache.Get(userModel.ID); ok {
