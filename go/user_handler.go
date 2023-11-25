@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -489,6 +490,8 @@ func fillUserResponseBulk(ctx context.Context, tx *sqlx.Tx, userModels []*UserMo
 
 	themeModelMap := make(map[int64]ThemeModel)
 	userIDs := make([]int64, len(userModels))
+	userIconGetIDs := make([]int64, len(userModels))
+	userIconHashMap := make(map[int64][32]byte, len(userModels))
 
 	for i := range userModels {
 		userModel := userModels[i]
@@ -518,29 +521,50 @@ func fillUserResponseBulk(ctx context.Context, tx *sqlx.Tx, userModels []*UserMo
 
 	for i := range userModels {
 		userModel := userModels[i]
-		themeModel := themeModelMap[userModel.ID]
 		var iconHash = [32]byte{}
 
 		if v, ok := userImageHashCache.Get(userModel.ID); ok {
 			cachedbyte, _ := hex.DecodeString(v)
 			copy(iconHash[:], cachedbyte)
-		}
-
-		var image []byte
-		if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				return []User{}, err
-			}
-			image, err = os.ReadFile(fallbackImage)
-			if err != nil {
-				return []User{}, err
-			}
+			userIconHashMap[userModel.ID] = iconHash
 		}
 
 		if iconHash == [32]byte{} {
-			iconHash = sha256.Sum256(image)
-			userImageHashCache.Set(userModel.ID, fmt.Sprintf("%x", iconHash))
+			userIconGetIDs[i] = userModel.ID
 		}
+	}
+
+	if len(userIconGetIDs) > 0 {
+		query, args, err := sqlx.In("SELECT user_id, image FROM icons WHERE user_id IN (?)", userIconGetIDs)
+		if err != nil {
+			return []User{}, err
+		}
+		query = tx.Rebind(query)
+		var userIcons []struct {
+			UserID int64  `db:"user_id"`
+			Image  []byte `db:"image"`
+		}
+		if err := tx.SelectContext(ctx, &userIcons, query, args...); err != nil {
+			return []User{}, err
+		}
+		wg := sync.WaitGroup{}
+		for i := range userIcons {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				userIcon := userIcons[i]
+				iconHash := sha256.Sum256(userIcon.Image)
+				userIconHashMap[userIcon.UserID] = iconHash
+				userImageHashCache.Set(userIcon.UserID, fmt.Sprintf("%x", iconHash))
+			}()
+		}
+		wg.Wait()
+	}
+
+	for i := range userModels {
+		userModel := userModels[i]
+		themeModel := themeModelMap[userModel.ID]
+		iconHash := userIconHashMap[userModel.ID]
 
 		user := User{
 			ID:          userModel.ID,
