@@ -118,7 +118,7 @@ func getLivecommentsHandler(c echo.Context) error {
 		}
 		query = tx.Rebind(query)
 
-		var commentOwnerModels []UserModel
+		var commentOwnerModels []*UserModel
 		if err := tx.SelectContext(ctx, &commentOwnerModels, query, args...); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
 		}
@@ -136,19 +136,26 @@ func getLivecommentsHandler(c echo.Context) error {
 
 		commentOwnerMap := make(map[int64]UserModel)
 		for _, commentOwnerModel := range commentOwnerModels {
-			commentOwnerMap[commentOwnerModel.ID] = commentOwnerModel
+			commentOwnerMap[commentOwnerModel.ID] = *commentOwnerModel
 		}
 		livestreamMap := make(map[int64]LivestreamModel)
 		for _, livestreamModel := range livestreamModels {
 			livestreamMap[livestreamModel.ID] = livestreamModel
 		}
 
+		commentOwners, err := fillUserResponseBulk(ctx, tx, commentOwnerModels)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livecomments: "+err.Error())
+		}
+
+		commentOwnerMap2 := make(map[int64]User)
+		for _, commentOwnerModel := range commentOwners {
+			commentOwnerMap2[commentOwnerModel.ID] = commentOwnerModel
+		}
+
 		for i, livecommentModel := range livecommentModels {
 			commentOwnerModel := commentOwnerMap[livecommentModel.UserID]
-			commentOwner, err := fillUserResponse(ctx, tx, commentOwnerModel)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livecomments: "+err.Error())
-			}
+			commentOwner := commentOwnerMap2[commentOwnerModel.ID]
 
 			livestreamModel := livestreamMap[livecommentModel.LivestreamID]
 			livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
