@@ -1,0 +1,25 @@
+matching_groups:
+  - /api/user/[^/]+/theme
+  - /api/user/[^/]+/livestream
+  - /api/livestream/[^/]+/livecomment
+  - /api/livestream/[^/]+/livecomment/[^/]+/report
+  - /api/livestream/[^/]+/reaction
+  - /api/livestream/[^/]+/report
+  - /api/livestream/[^/]+/moderate
+  - /api/livestream/[^/]+/enter
+  - /api/livestream/[^/]+/exit
+  - /api/livestream/[^/]+/ngword
+  - /api/user/[^/]+/statistics
+  - /api/user/[^/]+/icon
+  - /api/livestream/[^/]+/statistics
+sort: avg
+reverse: true
+metrics:
+  - count
+  - method
+  - uri
+  - min
+  - avg
+  - max
+  - sum
+file: /var/log/nginx/access.ndjson
