@@ -1,0 +1,11 @@
+/public/
+*.pprof
+.env
+
+img
+node
+perl
+php
+python  
+ruby
+rust
