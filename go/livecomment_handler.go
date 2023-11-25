@@ -118,7 +118,7 @@ func getLivecommentsHandler(c echo.Context) error {
 		}
 		query = tx.Rebind(query)
 
-		var commentOwnerModels []UserModel
+		var commentOwnerModels []*UserModel
 		if err := tx.SelectContext(ctx, &commentOwnerModels, query, args...); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
 		}
@@ -136,7 +136,7 @@ func getLivecommentsHandler(c echo.Context) error {
 
 		commentOwnerMap := make(map[int64]UserModel)
 		for _, commentOwnerModel := range commentOwnerModels {
-			commentOwnerMap[commentOwnerModel.ID] = commentOwnerModel
+			commentOwnerMap[commentOwnerModel.ID] = *commentOwnerModel
 		}
 		livestreamMap := make(map[int64]LivestreamModel)
 		for _, livestreamModel := range livestreamModels {
