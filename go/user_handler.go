@@ -290,7 +290,7 @@ func registerHandler(c echo.Context) error {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusNoContent {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to powerdns: status code is not 201")
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to powerdns: status code is not 204")
 		}
 	}
 	// if out, err := exec.Command("pdnsutil", "add-record", "u.isucon.dev", req.Name, "A", "3600", powerDNSSubdomainAddress).CombinedOutput(); err != nil {
