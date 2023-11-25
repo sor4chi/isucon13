@@ -272,7 +272,7 @@ func registerHandler(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to powerdns: "+err.Error())
 		}
 		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusCreated {
+		if resp.StatusCode != http.StatusNoContent {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to powerdns: status code is not 201")
 		}
 	}
