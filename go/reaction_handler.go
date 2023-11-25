@@ -67,13 +67,63 @@ func getReactionsHandler(c echo.Context) error {
 	}
 
 	reactions := make([]Reaction, len(reactionModels))
-	for i := range reactionModels {
-		reaction, err := fillReactionResponse(ctx, tx, reactionModels[i])
+	if len(reactionModels) > 0 {
+		userIDs := make([]int64, len(reactionModels))
+		livestreamIDs := make([]int64, len(reactionModels))
+		for i := range reactionModels {
+			userIDs[i] = reactionModels[i].UserID
+			livestreamIDs[i] = reactionModels[i].LivestreamID
+		}
+
+		query, args, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIDs)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
 		}
+		query = tx.Rebind(query)
+		var userModels []UserModel
+		if err := tx.SelectContext(ctx, &userModels, query, args...); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
+		}
 
-		reactions[i] = reaction
+		query, args, err = sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIDs)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
+		}
+		var livestreamModels []LivestreamModel
+		if err := tx.SelectContext(ctx, &livestreamModels, query, args...); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
+		}
+
+		userMap := make(map[int64]User)
+		for _, userModel := range userModels {
+			user, err := fillUserResponse(ctx, tx, userModel)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
+			}
+			userMap[user.ID] = user
+		}
+
+		livestreamMap := make(map[int64]Livestream)
+		for _, livestreamModel := range livestreamModels {
+			livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
+			}
+			livestreamMap[livestream.ID] = livestream
+		}
+
+		for i, reactionModel := range reactionModels {
+			user := userMap[reactionModel.UserID]
+			livestream := livestreamMap[reactionModel.LivestreamID]
+			reaction := Reaction{
+				ID:         reactionModel.ID,
+				EmojiName:  reactionModel.EmojiName,
+				User:       user,
+				Livestream: livestream,
+				CreatedAt:  reactionModel.CreatedAt,
+			}
+			reactions[i] = reaction
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -85,6 +86,8 @@ type PostIconResponse struct {
 	ID int64 `json:"id"`
 }
 
+var fallbackImageHash = sha256.Sum256([]byte(fallbackImage))
+
 func getIconHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -98,11 +101,6 @@ func getIconHandler(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-	prevHash, ok := userImageHashCache.Get(username)
-	if ok && prevHash == ifNoneMatch {
-		return c.NoContent(http.StatusNotModified)
-	}
-
 	var user UserModel
 	if err := tx.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -111,9 +109,15 @@ func getIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
+	prevHash, ok := userImageHashCache.Get(user.ID)
+	if ok && prevHash == ifNoneMatch {
+		return c.NoContent(http.StatusNotModified)
+	}
+
 	var image []byte
 	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			userImageHashCache.Set(user.ID, fmt.Sprintf("%x", fallbackImageHash))
 			return c.File(fallbackImage)
 		} else {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
@@ -121,7 +125,7 @@ func getIconHandler(c echo.Context) error {
 	}
 
 	iconHash := sha256.Sum256(image)
-	userImageHashCache.Set(username, fmt.Sprintf("%x", iconHash))
+	userImageHashCache.Set(user.ID, fmt.Sprintf("%x", iconHash))
 
 	return c.Blob(http.StatusOK, "image/jpeg", image)
 }
@@ -154,10 +158,13 @@ func postIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old user icon: "+err.Error())
 	}
 
+	userImageHashCache.Delete(userID)
+
 	rs, err := tx.ExecContext(ctx, "INSERT INTO icons (user_id, image) VALUES (?, ?)", userID, req.Image)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert user icon: "+err.Error())
 	}
+	userImageHashCache.Set(userID, fmt.Sprintf("%x", sha256.Sum256(req.Image)))
 
 	iconID, err := rs.LastInsertId()
 	if err != nil {
@@ -283,7 +290,7 @@ func registerHandler(c echo.Context) error {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusNoContent {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to powerdns: status code is not 201")
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to powerdns: status code is not 204")
 		}
 	}
 	// if out, err := exec.Command("pdnsutil", "add-record", "u.isucon.dev", req.Name, "A", "3600", powerDNSSubdomainAddress).CombinedOutput(); err != nil {
@@ -439,6 +446,13 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		themeCache.Set(userModel.ID, themeModel)
 	}
 
+	var iconHash = [32]byte{}
+
+	if v, ok := userImageHashCache.Get(userModel.ID); ok {
+		cachedbyte, _ := hex.DecodeString(v)
+		copy(iconHash[:], cachedbyte)
+	}
+
 	var image []byte
 	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -449,7 +463,11 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 			return User{}, err
 		}
 	}
-	iconHash := sha256.Sum256(image)
+
+	if iconHash == [32]byte{} {
+		iconHash = sha256.Sum256(image)
+		userImageHashCache.Set(userModel.ID, fmt.Sprintf("%x", iconHash))
+	}
 
 	user := User{
 		ID:          userModel.ID,
@@ -462,8 +480,6 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		},
 		IconHash: fmt.Sprintf("%x", iconHash),
 	}
-
-	userImageHashCache.Set(userModel.Name, user.IconHash)
 
 	return user, nil
 }
