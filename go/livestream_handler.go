@@ -110,13 +110,28 @@ func reserveLivestreamHandler(c echo.Context) error {
 		c.Logger().Warnf("予約枠一覧取得でエラー発生: %+v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get reservation_slots: "+err.Error())
 	}
-	for _, slot := range slots {
-		var count int
-		if err := tx.GetContext(ctx, &count, "SELECT slot FROM reservation_slots WHERE start_at = ? AND end_at = ?", slot.StartAt, slot.EndAt); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get reservation_slots: "+err.Error())
-		}
+
+	startTimes := make([]int64, len(slots))
+	endTimes := make([]int64, len(slots))
+	for i, slot := range slots {
+		startTimes[i] = slot.StartAt
+		endTimes[i] = slot.EndAt
+	}
+
+	var counts []int
+	query, args, err := sqlx.In("SELECT slot FROM reservation_slots WHERE start_at IN (?) AND end_at IN (?)", startTimes, endTimes)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get reservation_slots: "+err.Error())
+	}
+	query = tx.Rebind(query)
+
+	if err := tx.SelectContext(ctx, &counts, query, args...); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get reservation_slots: "+err.Error())
+	}
+
+	for i, slot := range slots {
 		c.Logger().Infof("%d ~ %d予約枠の残数 = %d\n", slot.StartAt, slot.EndAt, slot.Slot)
-		if count < 1 {
+		if counts[i] < 1 {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("予約期間 %d ~ %dに対して、予約区間 %d ~ %dが予約できません", termStartAt.Unix(), termEndAt.Unix(), req.StartAt, req.EndAt))
 		}
 	}
