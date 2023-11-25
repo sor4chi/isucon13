@@ -92,9 +92,9 @@ func getUserStatisticsHandler(c echo.Context) error {
 	if err := tx.SelectContext(ctx, &users, "SELECT * FROM users"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
 	}
-	var userIDs []int64
-	for _, user := range users {
-		userIDs = append(userIDs, user.ID)
+	userIDs := make([]int64, len(users))
+	for i, user := range users {
+		userIDs[i] = user.ID
 	}
 
 	// リアクション数を取得
