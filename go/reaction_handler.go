@@ -89,7 +89,7 @@ func getReactionsHandler(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
 		}
-		var livestreamModels []LivestreamModel
+		var livestreamModels []*LivestreamModel
 		if err := tx.SelectContext(ctx, &livestreamModels, query, args...); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
 		}
@@ -104,11 +104,11 @@ func getReactionsHandler(c echo.Context) error {
 		}
 
 		livestreamMap := make(map[int64]Livestream)
-		for _, livestreamModel := range livestreamModels {
-			livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
-			}
+		livestreams, err := fillLivestreamResponseBulk(ctx, tx, livestreamModels)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
+		}
+		for _, livestream := range livestreams {
 			livestreamMap[livestream.ID] = livestream
 		}
 
