@@ -145,32 +145,42 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 
 	// ライブコメント数、チップ合計
-	var totalLivecomments int64
-	var totalTip int64
 	var livestreams []*LivestreamModel
 	if err := tx.SelectContext(ctx, &livestreams, "SELECT * FROM livestreams WHERE user_id = ?", user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
 	}
 
-	for _, livestream := range livestreams {
-		var livecomments []*LivecommentModel
-		if err := tx.SelectContext(ctx, &livecomments, "SELECT * FROM livecomments WHERE livestream_id = ?", livestream.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
-		}
-
-		for _, livecomment := range livecomments {
-			totalTip += livecomment.Tip
-			totalLivecomments++
-		}
-	}
-
-	// 合計視聴者数
 	var livestreamIDs []int64
 	for _, livestream := range livestreams {
 		livestreamIDs = append(livestreamIDs, livestream.ID)
 	}
 
-	query, args, err := sqlx.In("SELECT livestream_id, COUNT(*) AS count FROM livestream_viewers_history WHERE livestream_id IN (?) GROUP BY livestream_id", livestreamIDs)
+	query, args, err := sqlx.In("SELECT livestream_id, SUM(tip) AS total_tips, COUNT(*) AS total_comments FROM livecomments WHERE livestream_id IN (?) GROUP BY livestream_id")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
+	}
+	query = tx.Rebind(query)
+
+	// ライブコメントとトータルチップの数を取得
+	var comments []struct {
+		LivestreamID  int64 `db:"livestream_id"`
+		TotalTips     int64 `db:"total_tips"`
+		TotalComments int64 `db:"total_comments"`
+	}
+
+	if err := tx.SelectContext(ctx, &comments, query, args...); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
+	}
+
+	var totalLivecomments int64
+	var totalTip int64
+	for _, comment := range comments {
+		totalTip += comment.TotalTips
+		totalLivecomments += comment.TotalComments
+	}
+
+	// 合計視聴者数
+	query, args, err = sqlx.In("SELECT livestream_id, COUNT(*) AS count FROM livestream_viewers_history WHERE livestream_id IN (?) GROUP BY livestream_id", livestreamIDs)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
 	}
