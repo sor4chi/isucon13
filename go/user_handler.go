@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -256,9 +256,29 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert user theme: "+err.Error())
 	}
 
-	if out, err := exec.Command("pdnsutil", "add-record", "u.isucon.dev", req.Name, "A", "3600", powerDNSSubdomainAddress).CombinedOutput(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, string(out)+": "+err.Error())
+	// post request to powerdns
+	{
+		endpoint := "http://192.168.0.11:8081/api/v1/servers/localhost/zones/u.isucon.dev"
+		body := fmt.Sprintf(`{"rrsets": [{"name": "%s", "type": "A", "ttl": 3600, "changetype": "REPLACE", "records": [{"content": "%s", "disabled": false}]}]}`, req.Name, powerDNSSubdomainAddress)
+		req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(body))
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to create request to powerdns: "+err.Error())
+		}
+		req.Header.Set("X-API-Key", "isudns")
+		req.Header.Set("Content-Type", "application/json")
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to powerdns: "+err.Error())
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to powerdns: status code is not 201")
+		}
 	}
+	// if out, err := exec.Command("pdnsutil", "add-record", "u.isucon.dev", req.Name, "A", "3600", powerDNSSubdomainAddress).CombinedOutput(); err != nil {
+	// 	return echo.NewHTTPError(http.StatusInternalServerError, string(out)+": "+err.Error())
+	// }
 
 	user, err := fillUserResponse(ctx, tx, userModel)
 	if err != nil {
