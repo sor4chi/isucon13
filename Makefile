@@ -13,9 +13,9 @@ MYSQL_SLOW_LOG:=/var/log/mysql/mysql-slow.log
 MYSQL_CONF:=/etc/mysql
 
 APP:=/home/isucon/webapp/go
-APP_BINARY:=isuconquest
+APP_BINARY:=isupipe
 
-SERVICE:=isuconquest.go.service
+SERVICE:=isupipe-go.service
 
 PPROF_EXEC_PORT:=6060
 PPROF_WEBUI_PORT:=1080
