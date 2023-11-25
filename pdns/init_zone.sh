@@ -7,7 +7,7 @@ if test -f /home/isucon/env.sh; then
 	. /home/isucon/env.sh
 fi
 
-ISUCON_SUBDOMAIN_ADDRESS=${ISUCON13_POWERDNS_SUBDOMAIN_ADDRESS:-192.168.0.12}
+ISUCON_SUBDOMAIN_ADDRESS=${ISUCON13_POWERDNS_SUBDOMAIN_ADDRESS:-176.32.82.23}
 
 temp_dir=$(mktemp -d)
 trap 'rm -rf $temp_dir' EXIT
