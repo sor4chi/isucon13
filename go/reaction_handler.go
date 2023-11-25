@@ -80,7 +80,7 @@ func getReactionsHandler(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
 		}
 		query = tx.Rebind(query)
-		var userModels []UserModel
+		var userModels []*UserModel
 		if err := tx.SelectContext(ctx, &userModels, query, args...); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
 		}
@@ -95,11 +95,11 @@ func getReactionsHandler(c echo.Context) error {
 		}
 
 		userMap := make(map[int64]User)
-		for _, userModel := range userModels {
-			user, err := fillUserResponse(ctx, tx, userModel)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
-			}
+		users, err := fillUserResponseBulk(ctx, tx, userModels)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
+		}
+		for _, user := range users {
 			userMap[user.ID] = user
 		}
 

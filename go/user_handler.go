@@ -483,3 +483,59 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 
 	return user, nil
 }
+
+func fillUserResponseBulk(ctx context.Context, tx *sqlx.Tx, userModels []*UserModel) ([]User, error) {
+	users := make([]User, len(userModels))
+
+	for i := range userModels {
+		userModel := userModels[i]
+		themeModel := ThemeModel{}
+		if v, ok := themeCache.Get(userModel.ID); ok {
+			themeModel = v
+		} else {
+			if err := tx.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
+				return []User{}, err
+			}
+			themeCache.Set(userModel.ID, themeModel)
+		}
+
+		var iconHash = [32]byte{}
+
+		if v, ok := userImageHashCache.Get(userModel.ID); ok {
+			cachedbyte, _ := hex.DecodeString(v)
+			copy(iconHash[:], cachedbyte)
+		}
+
+		var image []byte
+		if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				return []User{}, err
+			}
+			image, err = os.ReadFile(fallbackImage)
+			if err != nil {
+				return []User{}, err
+			}
+		}
+
+		if iconHash == [32]byte{} {
+			iconHash = sha256.Sum256(image)
+			userImageHashCache.Set(userModel.ID, fmt.Sprintf("%x", iconHash))
+		}
+
+		user := User{
+			ID:          userModel.ID,
+			Name:        userModel.Name,
+			DisplayName: userModel.DisplayName,
+			Description: userModel.Description,
+			Theme: Theme{
+				ID:       themeModel.ID,
+				DarkMode: themeModel.DarkMode,
+			},
+			IconHash: fmt.Sprintf("%x", iconHash),
+		}
+
+		users[i] = user
+	}
+
+	return users, nil
+}
