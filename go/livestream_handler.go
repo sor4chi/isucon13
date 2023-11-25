@@ -559,17 +559,18 @@ func fillLivestreamResponseBulk(ctx context.Context, tx *sqlx.Tx, livestreamMode
 		return []Livestream{}, err
 	}
 
-	userModels := make([]UserModel, 0, len(ownerIDs))
+	userModels := make([]*UserModel, 0, len(ownerIDs))
 	if err := tx.SelectContext(ctx, &userModels, query, params...); err != nil {
 		return []Livestream{}, err
 	}
 
 	userMap := make(map[int64]User)
-	for _, userModel := range userModels {
-		user, err := fillUserResponse(ctx, tx, userModel)
-		if err != nil {
-			return []Livestream{}, err
-		}
+
+	users, err := fillUserResponseBulk(ctx, tx, userModels)
+	if err != nil {
+		return []Livestream{}, err
+	}
+	for _, user := range users {
 		userMap[user.ID] = user
 	}
 
