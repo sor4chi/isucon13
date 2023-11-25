@@ -1,24 +1,22 @@
 package main
 
-// ISUCON的な参考: https://github.com/isucon/isucon12-qualify/blob/main/webapp/go/isuports.go#L336
-// sqlx的な参考: https://jmoiron.github.io/sqlx/
-
 import (
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
+	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-
-	"github.com/gorilla/sessions"
-	"github.com/labstack/echo-contrib/session"
 	echolog "github.com/labstack/gommon/log"
 )
 
@@ -119,6 +117,12 @@ func initializeHandler(c echo.Context) error {
 }
 
 func main() {
+	runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1)
+	go func() {
+		log.Fatal(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	e := echo.New()
 	e.Debug = true
 	e.Logger.SetLevel(echolog.DEBUG)
