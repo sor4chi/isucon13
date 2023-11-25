@@ -1,1 +1,3 @@
-[mysql]
+[mysqld]
+bind-address		= 192.168.0.13
+mysqlx-bind-address	= 192.168.0.13
