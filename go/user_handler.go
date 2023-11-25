@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -163,6 +164,7 @@ func postIconHandler(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert user icon: "+err.Error())
 	}
+	userImageHashCache.Set(userID, fmt.Sprintf("%x", sha256.Sum256(req.Image)))
 
 	iconID, err := rs.LastInsertId()
 	if err != nil {
@@ -447,8 +449,8 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 	var iconHash = [32]byte{}
 
 	if v, ok := userImageHashCache.Get(userModel.ID); ok {
-		iconHash = [32]byte{}
-		copy(iconHash[:], v)
+		cachedbyte, _ := hex.DecodeString(v)
+		copy(iconHash[:], cachedbyte)
 	}
 
 	var image []byte
