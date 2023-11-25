@@ -143,12 +143,7 @@ func getLivecommentsHandler(c echo.Context) error {
 			livestreamMap[livestreamModel.ID] = livestreamModel
 		}
 
-		ownerList := make([]*UserModel, len(commentOwnerMap))
-		for _, owner := range commentOwnerMap {
-			ownerList = append(ownerList, &owner)
-		}
-
-		commentOwners, err := fillUserResponseBulk(ctx, tx, ownerList)
+		commentOwners, err := fillUserResponseBulk(ctx, tx, commentOwnerModels)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livecomments: "+err.Error())
 		}
