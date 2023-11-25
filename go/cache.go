@@ -33,3 +33,9 @@ func (c *cache[K, V]) Init() {
 	c.items = make(map[K]V)
 	c.Unlock()
 }
+
+func (c *cache[K, V]) Delete(key K) {
+	c.Lock()
+	delete(c.items, key)
+	c.Unlock()
+}

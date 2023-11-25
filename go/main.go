@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"net"
@@ -33,7 +34,7 @@ var (
 
 var (
 	themeCache         = NewCache[int64, ThemeModel]()
-	userImageHashCache = NewCache[string, string]()
+	userImageHashCache = NewCache[int64, string]()
 )
 
 func init() {
@@ -146,6 +147,11 @@ func main() {
 
 	themeCache.Init()
 	userImageHashCache.Init()
+	fallbackImageFile, err := os.ReadFile(fallbackImage)
+	if err != nil {
+		panic(err)
+	}
+	fallbackImageHash = sha256.Sum256(fallbackImageFile)
 
 	e := echo.New()
 	e.Debug = true
