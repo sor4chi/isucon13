@@ -104,13 +104,68 @@ func getLivecommentsHandler(c echo.Context) error {
 	}
 
 	livecomments := make([]Livecomment, len(livecommentModels))
-	for i := range livecommentModels {
-		livecomment, err := fillLivecommentResponse(ctx, tx, livecommentModels[i])
+	if len(livecommentModels) > 0 {
+		userIDs := make([]int64, len(livecommentModels))
+		livestreamIDs := make([]int64, len(livecommentModels))
+		for i, livecommentModel := range livecommentModels {
+			userIDs[i] = livecommentModel.UserID
+			livestreamIDs[i] = livecommentModel.LivestreamID
+		}
+
+		query, args, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIDs)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
 		}
+		query = tx.Rebind(query)
 
-		livecomments[i] = livecomment
+		var commentOwnerModels []UserModel
+		if err := tx.SelectContext(ctx, &commentOwnerModels, query, args...); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+		}
+
+		query, args, err = sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIDs)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+		}
+		query = tx.Rebind(query)
+
+		var livestreamModels []LivestreamModel
+		if err := tx.SelectContext(ctx, &livestreamModels, query, args...); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+		}
+
+		commentOwnerMap := make(map[int64]UserModel)
+		for _, commentOwnerModel := range commentOwnerModels {
+			commentOwnerMap[commentOwnerModel.ID] = commentOwnerModel
+		}
+		livestreamMap := make(map[int64]LivestreamModel)
+		for _, livestreamModel := range livestreamModels {
+			livestreamMap[livestreamModel.ID] = livestreamModel
+		}
+
+		for i, livecommentModel := range livecommentModels {
+			commentOwnerModel := commentOwnerMap[livecommentModel.UserID]
+			commentOwner, err := fillUserResponse(ctx, tx, commentOwnerModel)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livecomments: "+err.Error())
+			}
+
+			livestreamModel := livestreamMap[livecommentModel.LivestreamID]
+			livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livecomments: "+err.Error())
+			}
+
+			livecomment := Livecomment{
+				ID:         livecommentModel.ID,
+				User:       commentOwner,
+				Livestream: livestream,
+				Comment:    livecommentModel.Comment,
+				Tip:        livecommentModel.Tip,
+				CreatedAt:  livecommentModel.CreatedAt,
+			}
+			livecomments[i] = livecomment
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
