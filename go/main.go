@@ -9,7 +9,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 
 	"github.com/go-sql-driver/mysql"
@@ -17,7 +16,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	echolog "github.com/labstack/gommon/log"
 )
 
@@ -140,12 +138,6 @@ func initializeHandler(c echo.Context) error {
 }
 
 func main() {
-	runtime.SetBlockProfileRate(1)
-	runtime.SetMutexProfileFraction(1)
-	go func() {
-		log.Fatal(http.ListenAndServe("localhost:6060", nil))
-	}()
-
 	themeCache.Init()
 	userImageHashCache.Init()
 	fallbackImageFile, err := os.ReadFile(fallbackImage)
@@ -155,9 +147,8 @@ func main() {
 	fallbackImageHash = sha256.Sum256(fallbackImageFile)
 
 	e := echo.New()
-	e.Debug = true
-	e.Logger.SetLevel(echolog.DEBUG)
-	e.Use(middleware.Logger())
+	e.Debug = false
+	e.Logger.SetLevel(echolog.OFF)
 	cookieStore := sessions.NewCookieStore(secret)
 	cookieStore.Options.Domain = "*.u.isucon.dev"
 	e.Use(session.Middleware(cookieStore))
