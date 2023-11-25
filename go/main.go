@@ -16,7 +16,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	echolog "github.com/labstack/gommon/log"
 )
 
@@ -150,7 +149,6 @@ func main() {
 	e := echo.New()
 	e.Debug = false
 	e.Logger.SetLevel(echolog.OFF)
-	e.Use(middleware.Logger())
 	cookieStore := sessions.NewCookieStore(secret)
 	cookieStore.Options.Domain = "*.u.isucon.dev"
 	e.Use(session.Middleware(cookieStore))
