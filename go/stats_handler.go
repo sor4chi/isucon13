@@ -323,12 +323,12 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		rankingMap[tip.LivestreamID] += tip.TotalTips
 	}
 
-	var ranking LivestreamRanking
-	for _, livestream := range livestreams {
-		ranking = append(ranking, LivestreamRankingEntry{
+	ranking := make(LivestreamRanking, len(livestreams))
+	for i, livestream := range livestreams {
+		ranking[i] = LivestreamRankingEntry{
 			LivestreamID: livestream.ID,
 			Score:        rankingMap[livestream.ID],
-		})
+		}
 	}
 
 	sort.Sort(ranking)
