@@ -221,13 +221,9 @@ func searchLivestreamsHandler(c echo.Context) error {
 		}
 	}
 
-	livestreams := make([]Livestream, len(livestreamModels))
-	for i := range livestreamModels {
-		livestream, err := fillLivestreamResponse(ctx, tx, *livestreamModels[i])
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
-		}
-		livestreams[i] = livestream
+	livestreams, err := fillLivestreamResponseBulk(ctx, tx, livestreamModels)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestreams: "+err.Error())
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -528,4 +524,100 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel Li
 		EndAt:        livestreamModel.EndAt,
 	}
 	return livestream, nil
+}
+
+func fillLivestreamResponseBulk(ctx context.Context, tx *sqlx.Tx, livestreamModels []*LivestreamModel) ([]Livestream, error) {
+	if len(livestreamModels) == 0 {
+		return []Livestream{}, nil
+	}
+	livestreams := make([]Livestream, len(livestreamModels))
+
+	// ownerを全て取得してから、mapに入れる
+	ownerIDs := make([]int64, len(livestreamModels))
+	for i := range livestreamModels {
+		ownerIDs[i] = livestreamModels[i].UserID
+	}
+
+	query, params, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", ownerIDs)
+	if err != nil {
+		return nil, err
+	}
+	var ownerModels []UserModel
+	if err := tx.SelectContext(ctx, &ownerModels, query, params...); err != nil {
+		return nil, err
+	}
+
+	ownerMap := make(map[int64]UserModel)
+	for _, ownerModel := range ownerModels {
+		ownerMap[ownerModel.ID] = ownerModel
+	}
+
+	// livestreamTagを全て取得してから、mapに入れる
+	var livestreamIDs []int64
+	for i := range livestreamModels {
+		livestreamIDs = append(livestreamIDs, livestreamModels[i].ID)
+	}
+
+	query, params, err = sqlx.In("SELECT * FROM livestream_tags WHERE livestream_id IN (?)", livestreamIDs)
+	if err != nil {
+		return nil, err
+	}
+	var livestreamTagModels []*LivestreamTagModel
+	if err := tx.SelectContext(ctx, &livestreamTagModels, query, params...); err != nil {
+		return nil, err
+	}
+
+	livestreamTagMap := make(map[int64][]*LivestreamTagModel)
+	for _, livestreamTagModel := range livestreamTagModels {
+		livestreamTagMap[livestreamTagModel.LivestreamID] = append(livestreamTagMap[livestreamTagModel.LivestreamID], livestreamTagModel)
+	}
+
+	// tagを全て取得してから、mapに入れる
+	var tagIDs []int64
+	for _, livestreamTagModels := range livestreamTagMap {
+		for _, livestreamTagModel := range livestreamTagModels {
+			tagIDs = append(tagIDs, livestreamTagModel.TagID)
+		}
+	}
+
+	query, params, err = sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIDs)
+	if err != nil {
+		return nil, err
+	}
+	var tagModels []Tag
+	if err := tx.SelectContext(ctx, &tagModels, query, params...); err != nil {
+		return nil, err
+	}
+
+	tagMap := make(map[int64]Tag)
+	for _, tagModel := range tagModels {
+		tagMap[tagModel.ID] = tagModel
+	}
+
+	for i := range livestreamModels {
+		ownerModel := ownerMap[livestreamModels[i].UserID]
+		owner, err := fillUserResponse(ctx, tx, ownerModel)
+		if err != nil {
+			return nil, err
+		}
+
+		livestream := Livestream{
+			ID:           livestreamModels[i].ID,
+			Owner:        owner,
+			Title:        livestreamModels[i].Title,
+			Description:  livestreamModels[i].Description,
+			PlaylistUrl:  livestreamModels[i].PlaylistUrl,
+			ThumbnailUrl: livestreamModels[i].ThumbnailUrl,
+			StartAt:      livestreamModels[i].StartAt,
+			EndAt:        livestreamModels[i].EndAt,
+		}
+
+		for _, livestreamTagModel := range livestreamTagMap[livestreamModels[i].ID] {
+			livestream.Tags = append(livestream.Tags, tagMap[livestreamTagModel.TagID])
+		}
+
+		livestreams[i] = livestream
+	}
+
+	return livestreams, nil
 }
