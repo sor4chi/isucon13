@@ -9,7 +9,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 
 	"github.com/go-sql-driver/mysql"
@@ -140,12 +139,6 @@ func initializeHandler(c echo.Context) error {
 }
 
 func main() {
-	runtime.SetBlockProfileRate(1)
-	runtime.SetMutexProfileFraction(1)
-	go func() {
-		log.Fatal(http.ListenAndServe("localhost:6060", nil))
-	}()
-
 	themeCache.Init()
 	userImageHashCache.Init()
 	fallbackImageFile, err := os.ReadFile(fallbackImage)
@@ -155,8 +148,8 @@ func main() {
 	fallbackImageHash = sha256.Sum256(fallbackImageFile)
 
 	e := echo.New()
-	e.Debug = true
-	e.Logger.SetLevel(echolog.DEBUG)
+	e.Debug = false
+	e.Logger.SetLevel(echolog.OFF)
 	e.Use(middleware.Logger())
 	cookieStore := sessions.NewCookieStore(secret)
 	cookieStore.Options.Domain = "*.u.isucon.dev"
