@@ -229,10 +229,10 @@ func searchLivestreamsHandler(c echo.Context) error {
 		// if err := tx.SelectContext(ctx, &livestreamModels, query, params...); err != nil {
 
 		query := `
-		SELECT * FROM livestreams AS A WHERE EXISTS (
-			SELECT * FROM livestream_tags as B
+		SELECT * FROM livestreams A WHERE EXISTS (
+			SELECT * FROM livestream_tags B
 				WHERE EXISTS (
-					SELECT * FROM tags AS C
+					SELECT * FROM tags C
 						WHERE C.name = ?
 						AND B.tag_id = C.id
 						AND B.livestream_id = A.id
@@ -556,8 +556,8 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel Li
 	// }
 
 	query := `
-		SELECT * FROM tags AS A WHERE EXISTS (
-			SELECT * FROM livestream_tags AS B
+		SELECT * FROM tags A WHERE EXISTS (
+			SELECT * FROM livestream_tags B
 			WHERE B.livestream_id = ?
 			AND B.tag_id = A.id
 		)
