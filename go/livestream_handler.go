@@ -545,17 +545,37 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel Li
 func fillLivestreamResponseBulk(ctx context.Context, tx *sqlx.Tx, livestreamModels []*LivestreamModel) ([]Livestream, error) {
 	livestreams := make([]Livestream, len(livestreamModels))
 
+	ownerIDs := make([]int64, len(livestreamModels))
 	for i := range livestreamModels {
-		livestreamModel := livestreamModels[i]
+		ownerIDs[i] = livestreamModels[i].UserID
+	}
 
-		ownerModel := UserModel{}
-		if err := tx.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {
-			return []Livestream{}, err
-		}
-		owner, err := fillUserResponse(ctx, tx, ownerModel)
+	if len(ownerIDs) == 0 {
+		return []Livestream{}, nil
+	}
+
+	query, params, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", ownerIDs)
+	if err != nil {
+		return []Livestream{}, err
+	}
+
+	userModels := make([]UserModel, 0, len(ownerIDs))
+	if err := tx.SelectContext(ctx, &userModels, query, params...); err != nil {
+		return []Livestream{}, err
+	}
+
+	userMap := make(map[int64]User)
+	for _, userModel := range userModels {
+		user, err := fillUserResponse(ctx, tx, userModel)
 		if err != nil {
 			return []Livestream{}, err
 		}
+		userMap[user.ID] = user
+	}
+
+	for i := range livestreamModels {
+		livestreamModel := livestreamModels[i]
+		owner := userMap[livestreamModel.UserID]
 
 		var livestreamTagModels []*LivestreamTagModel
 		if err := tx.SelectContext(ctx, &livestreamTagModels, "SELECT * FROM livestream_tags WHERE livestream_id = ?", livestreamModel.ID); err != nil {
