@@ -164,14 +164,9 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 
 	// ライブコメント数、チップ合計
-	var livestreams []*LivestreamModel
-	if err := tx.SelectContext(ctx, &livestreams, "SELECT * FROM livestreams WHERE user_id = ?", user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
-	}
-
 	var livestreamIDs []int64
-	for _, livestream := range livestreams {
-		livestreamIDs = append(livestreamIDs, livestream.ID)
+	if err := tx.SelectContext(ctx, &livestreamIDs, "SELECT id FROM livestreams WHERE user_id = ?", user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
 	}
 
 	query, args, err = sqlx.In("SELECT livestream_id, SUM(tip) AS total_tips, COUNT(*) AS total_comments FROM livecomments WHERE livestream_id IN (?) GROUP BY livestream_id", livestreamIDs)
@@ -275,17 +270,12 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		}
 	}
 
-	var livestreams []*LivestreamModel
-	if err := tx.SelectContext(ctx, &livestreams, "SELECT * FROM livestreams"); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	var livestreamIDs []int64
+	if err := tx.SelectContext(ctx, &livestreamIDs, "SELECT id FROM livestreams"); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
 	}
 
 	// ランク算出
-	var livestreamIDs []int64
-	for _, livestream := range livestreams {
-		livestreamIDs = append(livestreamIDs, livestream.ID)
-	}
-
 	var reactions []struct {
 		LivestreamID int64 `db:"livestream_id"`
 		Count        int64 `db:"count"`
@@ -323,11 +313,11 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		rankingMap[tip.LivestreamID] += tip.TotalTips
 	}
 
-	ranking := make(LivestreamRanking, len(livestreams))
-	for i, livestream := range livestreams {
+	ranking := make(LivestreamRanking, len(livestreamIDs))
+	for i, liveID := range livestreamIDs {
 		ranking[i] = LivestreamRankingEntry{
-			LivestreamID: livestream.ID,
-			Score:        rankingMap[livestream.ID],
+			LivestreamID: liveID,
+			Score:        rankingMap[liveID],
 		}
 	}
 
