@@ -31,6 +31,10 @@ var (
 	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
 )
 
+var (
+	themeCache = NewCache[int64, ThemeModel]()
+)
+
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	if secretKey, ok := os.LookupEnv("ISUCON13_SESSION_SECRETKEY"); ok {
@@ -105,6 +109,8 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 }
 
 func initializeHandler(c echo.Context) error {
+	themeCache.Init()
+
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
@@ -122,6 +128,8 @@ func main() {
 	go func() {
 		log.Fatal(http.ListenAndServe("localhost:6060", nil))
 	}()
+
+	themeCache.Init()
 
 	e := echo.New()
 	e.Debug = true
