@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 )
 
@@ -107,7 +108,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 		var tips int64
 		query = `
 		SELECT IFNULL(SUM(l2.tip), 0) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id	
+		INNER JOIN livestreams l ON l.user_id = u.id
 		INNER JOIN livecomments l2 ON l2.livestream_id = l.id
 		WHERE u.id = ?`
 		if err := tx.GetContext(ctx, &tips, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -133,8 +134,8 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	// リアクション数
 	var totalReactions int64
-	query := `SELECT COUNT(*) FROM users u 
-    INNER JOIN livestreams l ON l.user_id = u.id 
+	query := `SELECT COUNT(*) FROM users u
+    INNER JOIN livestreams l ON l.user_id = u.id
     INNER JOIN reactions r ON r.livestream_id = l.id
     WHERE u.name = ?
 	`
@@ -247,10 +248,23 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		TotalTips    int64 `db:"total_tips"`
 	}
 
-	if err := tx.SelectContext(ctx, &reactions, "SELECT livestream_id, COUNT(*) AS count FROM reactions WHERE livestream_id IN (?) GROUP BY livestream_id", livestreamIDs); err != nil {
+	query, args, err := sqlx.In("SELECT livestream_id, COUNT(*) AS count FROM reactions WHERE livestream_id IN (?) GROUP BY livestream_id", livestreamIDs)
+	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
 	}
-	if err := tx.SelectContext(ctx, &totalTips, "SELECT livestream_id, IFNULL(SUM(tip), 0) AS total_tips FROM livecomments WHERE livestream_id IN (?) GROUP BY livestream_id", livestreamIDs); err != nil {
+	query = tx.Rebind(query)
+
+	if err := tx.SelectContext(ctx, &reactions, query, args...); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
+	}
+
+	query, args, err = sqlx.In("SELECT livestream_id, IFNULL(SUM(tip), 0) AS total_tips FROM livecomments WHERE livestream_id IN (?) GROUP BY livestream_id", livestreamIDs)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tips: "+err.Error())
+	}
+	query = tx.Rebind(query)
+
+	if err := tx.SelectContext(ctx, &totalTips, query, args...); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tips: "+err.Error())
 	}
 
